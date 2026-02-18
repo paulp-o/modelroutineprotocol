@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Bun
+bun.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# MRP store (local runtime data)
+.mrp/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+
+# local tools
+.opencode/
+temp_docs/
