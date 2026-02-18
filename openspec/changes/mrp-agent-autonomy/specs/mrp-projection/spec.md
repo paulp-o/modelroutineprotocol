@@ -4,6 +4,7 @@
 The meta skill SKILL.md body SHALL include an "Agent authority" section that explicitly:
 - Grants agents blanket authority to create, modify, run, and evolve routines without asking user permission
 - Instructs agents to edit entrypoint scripts directly when needed (changes are tracked via fingerprints)
+- Instructs agents to use the model-native edit workflow for audit trail: `mrp edit <id>` to inspect, edit `.mrp` files directly, then `mrp edit <id> --commit` to record changes
 - Instructs agents to judge run outcomes after reviewing artifacts: run -> read output -> `mrp judge` to record assessment
 - Clarifies that exit codes are informational signals, not authoritative success/failure
 

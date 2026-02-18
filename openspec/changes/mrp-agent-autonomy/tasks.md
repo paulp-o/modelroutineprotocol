@@ -38,5 +38,17 @@
 - [ ] Update `src/__tests__/smoke.test.ts` to cover `mrp judge` error cases (non-existent run id -> `RUN_NOT_FOUND`; invalid/missing `--status` -> validation error).
 - [ ] Update `src/__tests__/smoke.test.ts` to cover script fingerprinting: `execution_snapshot.entrypoint_hash` recorded on run and `script_changed` becomes true when the entrypoint content changes between runs.
 - [ ] Update `src/__tests__/smoke.test.ts` to verify projected meta skill contains the autonomy language (create a host skill dir in a temp project, run `mrp sync-skills`, read the meta skill `SKILL.md`, assert it contains "Agent authority").
+- [ ] Update `src/__tests__/smoke.test.ts` to cover `mrp edit` inspect mode: outputs routine context and writes session file.
+- [ ] Update `src/__tests__/smoke.test.ts` to cover `mrp edit` commit mode: detects file changes and records an edit event in the ledger.
+- [ ] Update `src/__tests__/smoke.test.ts` to cover `mrp edit` no-changes case: returns `NO_CHANGES` error.
 - [ ] Run `bun test` and ensure all tests pass.
 - [ ] Run `bun run typecheck` and ensure typecheck passes.
+
+## 7. Edit Command Redesign (edit.ts, ledger schema, help)
+- [ ] Update `src/schema/ledger.ts` to add optional `edits` array with `EditEventSchema` (type, routine_id, edit_id, intent?, committed_at, changed_files[]).
+- [ ] Update `src/core/ledger.ts` to add `appendEditEvent(ledgerPath, editEvent)` helper and ensure `readLedger` tolerates missing `edits` field.
+- [ ] Rewrite `src/cli/edit.ts` inspect mode: when `--commit` is NOT set, output routine.yaml content, relevant file paths/content, fingerprints, instructions; write `edit_session.yaml` baseline.
+- [ ] Rewrite `src/cli/edit.ts` commit mode: when `--commit` IS set, read baseline from edit_session.yaml or last edit event, compute current fingerprints, diff, append EditEvent to ledger, update index timestamp.
+- [ ] Remove YAML patch behavior from `src/cli/edit.ts` (delete --patch requirement, stdin parsing, deepMerge usage).
+- [ ] Update `src/index.ts` to add `commit` to `BOOLEAN_FLAGS` and remove `patch` from `BOOLEAN_FLAGS`.
+- [ ] Update `src/cli/help.ts` edit command definition: new usage, flags (--commit, --intent), examples.

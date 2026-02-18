@@ -61,6 +61,24 @@ Non-Goals:
    - Rationale: Binary success/failure doesn't capture nuance the user described
    - Maps to exit code 0 in envelope (not an error)
 
+7. **Model-native edit flow (inspect + direct edit + commit)**
+   - `mrp edit <routine_id>` outputs routine context (including `routine.yaml`, entrypoint scripts, and fingerprints) and writes an `edit_session.yaml` baseline
+   - The model edits `.mrp` routine files directly using its native file editing tools
+   - `mrp edit <routine_id> --commit --intent "..."` diffs fingerprints and records an `EditEvent` in the routine ledger
+   - Rationale: Models frequently ignore "never edit directly" rules. Instead of fighting this, we make direct editing the supported path and add an audit trail.
+   - Alternative: Keep YAML patch via stdin -> rejected (models cannot realistically patch shell scripts; UX is poor and error-prone)
+
+8. **Separate `edits[]` array in ledger (not a union with runs)**
+   - Ledger gains an optional `edits` array of `EditEvent` entries
+   - Rationale: Keeps existing `runs` consumers working. Edit events are structurally different from run outcomes.
+   - Alternative: Single `events[]` union -> rejected (too much refactoring for v0.1)
+
+## Agent-Facing Messaging Updates
+
+- Remove "source of truth" / "never edit `.mrp/*` directly" language.
+- Replace with: agents own `.mrp` routine files, and SHOULD use `mrp edit <id>` (inspect) + direct edits + `mrp edit <id> --commit` to keep an audit trail.
+- Keep existing guidance to prefer CLI commands for structured updates where available (to avoid corrupting `routine.yaml` / `ledger.yaml`).
+
 ## Risks / Trade-offs
 
 - Models may over-judge as "success" to avoid appearing broken → Meta skill should instruct honest assessment. The routine's success criteria provide a rubric.

@@ -5,6 +5,7 @@ MRP's agent-facing prompts describe commands but never grant autonomy — models
 ## What Changes
 
 - Add explicit autonomy language to the projected meta skill and AGENTS.md, instructing agents to freely create, modify, run, and evolve routines without asking permission.
+- Redesign `mrp edit` from YAML-patch-via-stdin to an inspect + direct-edit + commit flow. Models edit `.mrp` routine files directly; `mrp edit` provides context and records an audit trail.
 - Track entrypoint script fingerprints (sha256 hash + mtime) in run outcomes so script changes between runs are visible, not invisible.
 - Separate "auto status" (exit-code-derived signal) from "authoritative status" (model judgment) in the outcome model. Exit codes become informational data, not the final word.
 - Add `mrp judge` command so the model can override the auto-determined status with its own assessment after reviewing stdout/stderr artifacts and applying contextual reasoning.
@@ -19,6 +20,7 @@ MRP's agent-facing prompts describe commands but never grant autonomy — models
 ### Modified Capabilities
 - `mrp-projection`: Meta skill and routine wrapper content updated with agent autonomy instructions and judge-after-run guidance.
 - `mrp-store`: AGENTS.md content updated with autonomy language, script editing guidance, and judgment workflow.
+- `mrp-edit`: Edit command redesigned for a model-native workflow (inspect + direct edit + commit) with audit trail.
 - `mrp-execution`: Outcome model extended with `status_auto` (exit-code signal), `judgment` (model assessment), and `execution_snapshot` (script fingerprint). Existing `status` field becomes the authoritative status — initially set from exit code, updatable via `mrp judge`.
 - `mrp-cli`: New `judge` command added to router. Help definitions updated.
 
