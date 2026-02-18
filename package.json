@@ -1,17 +1,31 @@
 {
-  "name": "modelroutineprotocol",
+  "name": "mrp",
+  "version": "0.1.0",
+  "description": "Model Routine Protocol – manage and run repeatable agent routines",
   "module": "src/index.ts",
   "type": "module",
-  "private": true,
+  "engines": {
+    "bun": ">=1.0.0",
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "start": "bun run src/index.ts",
+    "dev": "bun run src/index.ts",
     "typecheck": "bunx tsc --noEmit",
-    "build": "bun build src/index.ts --outfile dist/mrp.js --target bun",
-    "compile": "bun build src/index.ts --compile --outfile dist/mrp"
+    "build": "bun build src/index.ts --outfile dist/mrp.js --target node",
+    "compile": "bun build src/index.ts --compile --outfile dist/mrp",
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
   },
   "bin": {
     "mrp": "src/index.ts"
   },
+  "files": [
+    "src/",
+    "dist/",
+    "bin/",
+    "README.md"
+  ],
   "devDependencies": {
     "@types/bun": "latest"
   },

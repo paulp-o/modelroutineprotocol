@@ -38,7 +38,7 @@ export async function readIndex(root: string): Promise<Index> {
     return parseIndex(raw);
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
-      return { ...EMPTY_INDEX };
+      return await rebuildIndex(root);
     }
 
     throw error;

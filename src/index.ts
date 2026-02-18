@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { join } from "node:path";
 
 import { handleArchive } from "./cli/archive.ts";
@@ -7,6 +8,7 @@ import { handleDeprecate } from "./cli/deprecate.ts";
 import { handleDoctor } from "./cli/doctor.ts";
 import { handleEdit } from "./cli/edit.ts";
 import { handleInit } from "./cli/init.ts";
+import { renderCommandHelp, renderGlobalHelp } from "./cli/help.ts";
 import { handleList } from "./cli/list.ts";
 import { handlePrune } from "./cli/prune.ts";
 import { handlePromote } from "./cli/promote.ts";
@@ -22,7 +24,7 @@ import { checkProjectionAutoSuggest, generateDiscoveryFooter } from "./core/disc
 import { readLedger } from "./core/ledger.ts";
 import { parseConfig } from "./schema/config.ts";
 import { parseRoutine, type Routine } from "./schema/routine.ts";
-import { errEnvelope, exitCodeFor, okEnvelope, printEnvelope, type Envelope } from "./util/envelope.ts";
+import { errEnvelope, exitCodeFor, printEnvelope, type Envelope } from "./util/envelope.ts";
 import { readYamlFile } from "./util/yaml-io.ts";
 
 type CommandHandler = (args: string[], flags: Record<string, unknown>) => Promise<Envelope>;
@@ -212,6 +214,7 @@ function parseCliArgs(argv: string[]): {
 
   // Known boolean-only flags (no value expected)
   const BOOLEAN_FLAGS = new Set([
+    "help",
     "force", "dry-run", "dryRun", "patch", "projected",
     "include-archived", "includeArchived", "no-artifacts", "noArtifacts",
     "rebuild-index", "rebuildIndex", "from-quarantine", "fromQuarantine",
@@ -282,12 +285,18 @@ async function main(): Promise<Envelope> {
     flags["--"] = passthrough;
   }
 
+  const helpRequested = flags.help === true;
+  if (helpRequested) {
+    const helpCommandName = positionals[0];
+    if (!helpCommandName) {
+      return renderGlobalHelp();
+    }
+    return renderCommandHelp(helpCommandName);
+  }
+
   const commandName = positionals[0];
   if (!commandName) {
-    return okEnvelope("mrp", {
-      usage: "mrp <command> [args...] [--flags]",
-      commands: COMMANDS,
-    });
+    return renderGlobalHelp();
   }
 
   const handler = COMMAND_HANDLERS[commandName];

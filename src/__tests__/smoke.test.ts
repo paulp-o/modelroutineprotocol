@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -125,6 +125,14 @@ function expectFail(result: MRPResult, command?: string): void {
     expect(result.command).toBe(command);
   }
   expect(result.error).toBeDefined();
+}
+
+function parseFrontmatter(md: string): Record<string, unknown> {
+  const match = md.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) {
+    throw new Error("No YAML frontmatter found");
+  }
+  return YAML.parse(match[1]!) as Record<string, unknown>;
 }
 
 async function initStore(cwd: string): Promise<MRPResult> {
@@ -389,5 +397,115 @@ describe("MRP Integration", () => {
 
     const doctor = await runMrp(["doctor"], tempDir);
     expectOk(doctor, "doctor");
+  });
+
+  test("projected routine SKILL.md includes YAML frontmatter", async () => {
+    await mkdir(join(tempDir, ".cursor"), { recursive: true });
+    await initStore(tempDir);
+
+    const routine = await createRoutine(tempDir, "Frontmatter Test");
+
+    expectOk(await runMrp(["promote", routine.id], tempDir), "promote");
+
+    const editPatch = YAML.stringify({ projection: { projected: true } });
+    expectOk(await runMrpEditWithStdin(routine.id, editPatch, tempDir), "edit");
+
+    expectOk(await runMrp(["sync-skills"], tempDir), "sync-skills");
+
+    const skillsDir = join(tempDir, ".cursor", "skills");
+    const entries = await readdir(skillsDir, { withFileTypes: true });
+    const wrapperDir = entries.find((e) => e.isDirectory() && e.name.startsWith("mrp-"));
+    expect(wrapperDir).toBeDefined();
+
+    const skillMd = await readFile(join(skillsDir, wrapperDir!.name, "SKILL.md"), "utf8");
+    const fm = parseFrontmatter(skillMd);
+    expect(fm.name).toBe(wrapperDir!.name);
+    expect(typeof fm.description).toBe("string");
+    expect((fm.description as string).length).toBeGreaterThan(0);
+    expect(skillMd).toContain(`mrp run ${routine.id}`);
+  });
+
+  test("projected meta skill has frontmatter and mentions core commands", async () => {
+    await mkdir(join(tempDir, ".cursor"), { recursive: true });
+    const init = await runMrp(["init"], tempDir);
+    expectOk(init, "init");
+
+    const metaPath = join(tempDir, ".cursor", "skills", "mrp", "SKILL.md");
+    expect(await pathExists(metaPath)).toBe(true);
+
+    const md = await readFile(metaPath, "utf8");
+    const fm = parseFrontmatter(md);
+    expect(fm.name).toBe("mrp");
+    expect(typeof fm.description).toBe("string");
+
+    expect(md).toContain("mrp init");
+    expect(md).toContain("mrp create");
+    expect(md).toContain("mrp list");
+    expect(md).toContain("mrp show");
+    expect(md).toContain("mrp run");
+    expect(md).toContain("mrp promote");
+    expect(md).toContain("mrp edit");
+    expect(md).toContain("mrp <command> --help");
+  });
+
+  test("--help returns help envelope without side effects", async () => {
+    const global = await runMrp(["--help"], tempDir);
+    expectOk(global, "help");
+    expect(Array.isArray(global.data?.commands)).toBe(true);
+    expect(global.data.commands.length).toBeGreaterThan(0);
+    expect(global.data.commands.some((c: any) => c.command === "init")).toBe(true);
+    expect(await pathExists(join(tempDir, ".mrp"))).toBe(false);
+
+    const cmdHelp = await runMrp(["create", "--help"], tempDir);
+    expectOk(cmdHelp, "help");
+    expect(cmdHelp.data?.command).toBe("create");
+    expect(typeof cmdHelp.data?.usage).toBe("string");
+    expect(Array.isArray(cmdHelp.data?.flags)).toBe(true);
+    expect(Array.isArray(cmdHelp.data?.examples)).toBe(true);
+    expect(await pathExists(join(tempDir, ".mrp"))).toBe(false);
+
+    const unknown = await runMrp(["not-a-command", "--help"], tempDir);
+    expectFail(unknown, "help");
+    expect(unknown.error.code).toBe("UNKNOWN_COMMAND");
+    expect(await pathExists(join(tempDir, ".mrp"))).toBe(false);
+
+    const initHelp = await runMrp(["init", "--help"], tempDir);
+    expectOk(initHelp, "help");
+    expect(initHelp.data?.command).toBe("init");
+    expect(await pathExists(join(tempDir, ".mrp"))).toBe(false);
+  });
+
+  test("init creates AGENTS.md and auto-projects meta skill", async () => {
+    await mkdir(join(tempDir, ".cursor"), { recursive: true });
+    const init = await runMrp(["init"], tempDir);
+    expectOk(init, "init");
+
+    const agentsPath = join(tempDir, ".mrp", "AGENTS.md");
+    expect(await pathExists(agentsPath)).toBe(true);
+    const agentsContent = await readFile(agentsPath, "utf8");
+    expect(agentsContent).toContain("MRP Store");
+    expect(agentsContent).toContain("mrp list");
+    expect(agentsContent).toContain("Do not edit");
+
+    const metaPath = join(tempDir, ".cursor", "skills", "mrp", "SKILL.md");
+    expect(await pathExists(metaPath)).toBe(true);
+
+    expect(init.data?.detected_hosts).toContain("cursor");
+  });
+
+  test("missing index.yaml triggers silent rebuild", async () => {
+    await initStore(tempDir);
+    const routine = await createRoutine(tempDir, "Index Rebuild Test");
+
+    const indexPath = join(tempDir, ".mrp", "index.yaml");
+    await rm(indexPath);
+    expect(await pathExists(indexPath)).toBe(false);
+
+    const listed = await runMrp(["list"], tempDir);
+    expectOk(listed, "list");
+    expect(listed.data?.total).toBe(1);
+    expect(listed.data?.routines?.[0]?.id).toBe(routine.id);
+
+    expect(await pathExists(indexPath)).toBe(true);
   });
 });

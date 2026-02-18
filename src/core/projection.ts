@@ -9,6 +9,10 @@ import { readYamlFile, writeYamlAtomic } from "../util/yaml-io.ts";
 type RoutineSkillInput = {
   id: string;
   name: string;
+  description?: string;
+  projection?: {
+    skill_name?: string;
+  };
   intent: {
     goal: string;
     non_goals: string[];
@@ -45,6 +49,11 @@ function formatCriteria(items: Array<{ id: string; text: string }>): string {
   }
 
   return items.map((item) => `- ${item.id}: ${item.text}`).join("\n");
+}
+
+function renderFrontmatter(fields: { name: string; description: string }): string {
+  const escapedDescription = fields.description.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+  return `---\nname: ${fields.name}\ndescription: "${escapedDescription}"\n---\n\n`;
 }
 
 function normalizeProjectionState(raw: unknown): Record<string, ProjectionStateEntry> {
@@ -132,6 +141,9 @@ async function upsertSkillFile(path: string, content: string): Promise<"added" |
 }
 
 export function renderRoutineSkillMd(routine: RoutineSkillInput): string {
+  const skillName = routine.projection?.skill_name || routine.id;
+  const wrapperDirName = `mrp-${skillName}`;
+  const description = routine.description || routine.intent.goal;
   const deprecated = routine.lifecycle?.state === "deprecated";
   const deprecatedNotice = deprecated
     ? [
@@ -142,6 +154,10 @@ export function renderRoutineSkillMd(routine: RoutineSkillInput): string {
     : "";
 
   return [
+    renderFrontmatter({
+      name: wrapperDirName,
+      description,
+    }),
     `# ${routine.name}`,
     "",
     deprecatedNotice,
@@ -169,17 +185,33 @@ export function renderRoutineSkillMd(routine: RoutineSkillInput): string {
   ].join("\n");
 }
 
-export function renderMetaSkillMd(): string {
+export function renderMetaSkillMd(metaSkillName: string = "mrp"): string {
   return [
-    "# mrp",
+    renderFrontmatter({
+      name: metaSkillName,
+      description: "Model Routine Protocol (MRP) – manage and run repeatable agent routines.",
+    }),
+    `# ${metaSkillName}`,
     "",
-    "Meta skill for Model Routine Protocol (MRP).",
+    "Model Routine Protocol (MRP) helps agents capture, discover, and run repeatable workflows from local project state.",
     "",
-    "## Core commands",
-    "- `mrp list`: list routines and current states",
-    "- `mrp show <routine_id>`: show canonical routine definition",
-    "- `mrp run <routine_id>`: execute a routine",
-    "- `mrp create --name ... --goal ...`: create a new routine",
+    "## Core workflow",
+    "- `mrp init`: create and initialize the local `.mrp/` store for this project.",
+    "- `mrp create --name <name> --goal \"<goal>\"`: create a new routine scaffold you can refine.",
+    "- `mrp list`: discover available routines and current lifecycle states.",
+    "- `mrp show <routine_id>`: inspect the canonical routine definition and current metadata.",
+    "- `mrp run <routine_id>`: execute a routine and record outcomes/artifacts.",
+    "- `mrp promote <routine_id>`: mark a routine as preferred for active use.",
+    "- `mrp edit <routine_id>`: update routine details such as goal, non-goals, or criteria.",
+    "",
+    "Run `mrp <command> --help` for detailed usage and flags.",
+    "",
+    "## Additional lifecycle and maintenance commands",
+    "- `mrp demote <routine_id>` and `mrp deprecate <routine_id>` for lifecycle transitions.",
+    "- `mrp archive <routine_id>` and `mrp quarantine <routine_id>` for long-term retirement or isolation.",
+    "- `mrp sync-skills` to refresh projected host skills.",
+    "- `mrp doctor` to validate store health and configuration.",
+    "- `mrp prune` to clean stale runtime artifacts.",
     "",
     "## Canonical truth",
     "- `mrp list` and `mrp show` are authoritative over host skill listings.",
@@ -269,7 +301,7 @@ export async function syncSkills(params: {
 
     const metaResult = await upsertSkillFile(
       metaSkillPath(host, root, config.projection.meta_skill_name),
-      renderMetaSkillMd(),
+      renderMetaSkillMd(config.projection.meta_skill_name),
     );
     if (metaResult === "added") {
       added += 1;
