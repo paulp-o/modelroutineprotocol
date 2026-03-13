@@ -67,7 +67,7 @@ export interface MetaPromptResult {
  * Scan for known agent config files at projectRoot and inject/update the MRP meta-prompt.
  * - If file exists with markers: update the section
  * - If file exists without markers: inject (append) the section
- * - If file doesn't exist: skip (don't create files the user hasn't opted into)
+ * - If file doesn't exist: create it with the MRP meta-prompt content
  */
 export async function syncMetaPrompts(projectRoot: string): Promise<MetaPromptResult[]> {
   const results: MetaPromptResult[] = [];
@@ -85,8 +85,14 @@ export async function syncMetaPrompts(projectRoot: string): Promise<MetaPromptRe
       } else {
         results.push({ file: fileName, action: "skipped" });
       }
-    } catch {
-      results.push({ file: fileName, action: "skipped" });
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+        const fileContent = MRP_META_PROMPT + "\n";
+        await writeFile(filePath, fileContent, "utf8");
+        results.push({ file: fileName, action: "created" });
+      } else {
+        results.push({ file: fileName, action: "skipped" });
+      }
     }
   }
 

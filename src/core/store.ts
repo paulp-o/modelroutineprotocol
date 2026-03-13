@@ -99,12 +99,38 @@ export function runsDir(root: string, id: string): string {
   return join(routineDir(root, id), "runs");
 }
 
+async function pathExistsAsFile(path: string): Promise<boolean> {
+  try {
+    const entry = await stat(path);
+    return entry.isFile();
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error) {
+      const code = String((error as { code?: string }).code);
+      if (code === "ENOENT") {
+        return false;
+      }
+    }
+
+    throw error;
+  }
+}
+
 async function detectHosts(root: string): Promise<string[]> {
   const detected: string[] = [];
 
   for (const [hostDir, hostName] of HOST_DIRECTORY_MAP) {
     if (await pathExistsAsDirectory(join(root, hostDir))) {
       detected.push(hostName);
+    }
+  }
+
+  // OpenCode can also be detected via config files (not just .opencode directory)
+  if (!detected.includes("opencode")) {
+    for (const f of ["opencode.json", "opencode.jsonc"]) {
+      if (await pathExistsAsFile(join(root, f))) {
+        detected.push("opencode");
+        break;
+      }
     }
   }
 
