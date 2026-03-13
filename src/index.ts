@@ -282,7 +282,8 @@ function appendFlag(flags: Record<string, unknown>, key: string, value: string):
 }
 
 async function main(): Promise<Envelope> {
-  const { positionals, flags, passthrough } = parseCliArgs(Bun.argv.slice(2));
+  const argv = typeof Bun !== "undefined" ? Bun.argv.slice(2) : process.argv.slice(2);
+  const { positionals, flags, passthrough } = parseCliArgs(argv);
 
   // Store passthrough args in flags for run command
   if (passthrough.length > 0) {

@@ -6,6 +6,19 @@
 
 ---
 
+## Install
+
+```bash
+# npm (recommended)
+npm install -g @paulp-o/mrp
+
+# GitHub Packages
+npm install -g @paulp-o/mrp --registry=https://npm.pkg.github.com
+
+# Or download standalone binary from GitHub Releases
+# https://github.com/paulp-o/modelroutineprotocol/releases
+```
+
 ## What happens when your agent has MRP
 
 Without MRP, your agent writes `bun test` from scratch every session. With MRP:

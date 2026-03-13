@@ -1,9 +1,17 @@
 {
-  "name": "mrp",
+  "name": "@paulp-o/mrp",
   "version": "0.1.0",
   "description": "Model Routine Protocol – manage and run repeatable agent routines",
-  "module": "src/index.ts",
+  "license": "Apache-2.0",
   "type": "module",
+  "main": "dist/mrp.js",
+  "bin": {
+    "mrp": "dist/mrp.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paulp-o/modelroutineprotocol.git"
+  },
   "engines": {
     "bun": ">=1.0.0",
     "node": ">=20.0.0"
@@ -12,20 +20,20 @@
     "start": "bun run src/index.ts",
     "dev": "bun run src/index.ts",
     "typecheck": "bunx tsc --noEmit",
-    "build": "bun build src/index.ts --outfile dist/mrp.js --target node",
+    "build": "bun build src/index.ts --outfile dist/mrp.js --target node && node scripts/prepare-bin.mjs",
     "compile": "bun build src/index.ts --compile --outfile dist/mrp",
     "test": "bun test",
-    "prepublishOnly": "bun run build"
-  },
-  "bin": {
-    "mrp": "src/index.ts"
+    "prepack": "bun run build"
   },
   "files": [
-    "src/",
     "dist/",
-    "bin/",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
