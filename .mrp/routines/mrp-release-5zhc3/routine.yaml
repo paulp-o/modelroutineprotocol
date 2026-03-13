@@ -1,0 +1,22 @@
+id: mrp-release-5zhc3
+name: release
+intent:
+  goal: Build, test, version bump, publish to npm + GitHub Packages, and create GitHub Release
+  non_goals:
+    - Do not modify source code. Do not run in production.
+  success_criteria:
+    - id: npm
+      text: npm publish succeeds
+execution:
+  entrypoint: run.sh
+  shell: bash
+tags: []
+lifecycle:
+  state: active
+  created_at: 2026-03-13T03:00:28.059Z
+  updated_at: 2026-03-13T03:01:18.255Z
+policy: {}
+projection:
+  eligible: true
+  projected: true
+meta: {}
