@@ -93,17 +93,36 @@ export const HELP_COMMANDS: Record<string, HelpCommand> = {
   },
   edit: {
     command: "edit",
-    description: "Edit a routine via YAML patch from stdin",
-    usage: "mrp edit <routine_id> --patch",
+    description: "Inspect routine context for editing, or commit tracked file changes with an audit trail.",
+    usage: "mrp edit <routine_id> [--commit] [--intent \"<intent>\"]",
     flags: [
       {
-        name: "--patch",
+        name: "--commit",
         type: "boolean",
-        required: true,
-        description: "Read YAML patch from stdin",
+        required: false,
+        description: "Commit mode: diff tracked files and record an EditEvent in the ledger",
+      },
+      {
+        name: "--intent",
+        type: "string",
+        required: false,
+        description: "Description of the edit intent (used with --commit)",
       },
     ],
-    examples: ["echo 'description: Updated' | mrp edit mrp-build-a1b2 --patch"],
+    examples: ["mrp edit mrp-build-a1b2", "mrp edit mrp-build-a1b2 --commit --intent \"fix flaky build step\""],
+  },
+  judge: {
+    command: "judge",
+    description: "Record model judgment on a completed run, overriding the auto-determined status.",
+    usage: "mrp judge <routine_id> <run_id> --status <status> [--reason \"<reason>\"]",
+    flags: [
+      { name: "--status", type: "string", required: true, description: "Judged status: success, failure, or partial" },
+      { name: "--reason", type: "string", required: false, description: "Reason for the judgment" },
+    ],
+    examples: [
+      "mrp judge mrp-build-a1b2 \"2026-01-15T10:30:45Z#0001\" --status success --reason \"warnings only, build artifact produced\"",
+      "mrp judge mrp-test-c3d4 \"2026-01-15T11:00:00Z#0001\" --status partial --reason \"1 flaky test, main changes verified\"",
+    ],
   },
   run: {
     command: "run",
@@ -174,6 +193,13 @@ export const HELP_COMMANDS: Record<string, HelpCommand> = {
     usage: "mrp sync-skills",
     flags: [],
     examples: ["mrp sync-skills"],
+  },
+  update: {
+    command: "update",
+    description: "Update store artifacts (e.g. AGENTS.md) to the current MRP version.",
+    usage: "mrp update",
+    flags: [],
+    examples: ["mrp update"],
   },
   doctor: {
     command: "doctor",

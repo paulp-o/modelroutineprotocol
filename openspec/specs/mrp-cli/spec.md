@@ -42,6 +42,8 @@ After successful store creation, `mrp init` SHALL immediately project the `mrp` 
 ### Requirement: Global Help Flag
 All commands SHALL support the `--help` flag.
 
+The help system SHALL include `judge` in the global command list and provide per-command help for `mrp judge --help`.
+
 When `--help` is present, the CLI SHALL output usage information in YAML envelope format and exit with code 0 without side effects.
 
 #### Scenario: Help output does not execute command
@@ -122,6 +124,13 @@ When `--help` is present, the CLI SHALL output usage information in YAML envelop
 #### Scenario: Run times out
 - **WHEN** the entrypoint does not complete within `timeout_sec`
 - **THEN** the process is killed, output contains `data.outcome` with `status: timeout`
+
+### Requirement: mrp judge Command
+`mrp judge <routine_id> <run_id> --status <status> [--reason "<reason>"]` SHALL update a run's authoritative status based on model assessment. Valid statuses: `success`, `failure`, `partial`. The command SHALL output a YAML envelope with `command: "judge"`.
+
+#### Scenario: Judge updates ledger and index
+- **WHEN** `mrp judge mrp-build-a1b2 run-001 --status success --reason "warnings only"` is run
+- **THEN** the ledger run entry is updated, index reflects the judged status, and the envelope contains the updated run data
 
 ### Requirement: mrp deprecate Command
 `mrp deprecate <routine_id>` SHALL transition a routine from `active` to `deprecated` state.

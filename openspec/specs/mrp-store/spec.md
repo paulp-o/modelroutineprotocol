@@ -113,9 +113,21 @@ The content of `.mrp/AGENTS.md` SHALL:
 - Instruct readers to use the CLI (`mrp list`, `mrp show`, `mrp run`) as the interface
 - Warn against editing store files directly
 
+The `.mrp/AGENTS.md` content SHALL include:
+- Agent autonomy statement: agents may freely create, modify, and evolve routines
+- Ownership statement: agents own `.mrp` routine files and may edit them directly
+- Edit audit guidance: use `mrp edit <routine_id>` (inspect) + direct edits + `mrp edit <routine_id> --commit` to record changes
+- Script editing guidance: direct editing of entrypoint scripts is expected and tracked
+- Judgment workflow: after running, agents should review output and use `mrp judge` to record assessment
+- Guidance: prefer CLI commands for structured updates where available (avoid corrupting `routine.yaml` / `ledger.yaml`)
+
 #### Scenario: AGENTS.md created on init
 - **WHEN** `mrp init` runs successfully
 - **THEN** `.mrp/AGENTS.md` exists and contains the minimal CLI pointer and the warning not to edit files directly
+
+#### Scenario: AGENTS.md includes autonomy language
+- **WHEN** `mrp init` generates `.mrp/AGENTS.md`
+- **THEN** it contains explicit statements granting agent autonomy and explaining the judgment workflow
 
 ### Requirement: Index Auto-Rebuild
 When any command requires the store index and `.mrp/index.yaml` does not exist, the system SHALL silently rebuild the index from routine files on disk and proceed with the command.

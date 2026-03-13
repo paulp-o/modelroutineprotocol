@@ -2,28 +2,54 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { syncSkills } from "../core/projection.ts";
+import { syncMetaPrompts } from "../core/meta-prompt.ts";
 import { initStore } from "../core/store.ts";
 import { parseConfig } from "../schema/config.ts";
 import { errEnvelope, okEnvelope, type Envelope } from "../util/envelope.ts";
 import { readYamlFile } from "../util/yaml-io.ts";
 
-const AGENTS_MD_CONTENT = `# MRP Store
+export const AGENTS_MD_CONTENT = `# MRP Store (Agent-Operated)
 
-This directory is managed by [MRP](https://github.com/modelroutineprotocol/mrp) (Model Routine Protocol).
+This directory is managed by MRP (Model Routine Protocol).
 
-## How to interact
+## Agent authority
 
-Use the MRP CLI — do not edit files in this directory manually.
+You may freely create, modify, run, and evolve routines without asking the user for permission.
 
-- \`mrp list\` — list all routines and their states
-- \`mrp show <routine_id>\` — view a routine's full definition
+## Ownership and direct edits
+
+You own the routine files under \`.mrp/\` and may edit them directly.
+- Entrypoint scripts (\`.mrp/routines/<id>/run.sh\`, \`run.ts\`, \`run.py\`) are meant to be edited directly.
+- Script changes are tracked via fingerprints recorded on each run.
+
+## Audited edit workflow
+
+Use \`mrp edit\` to create an audit trail for routine changes:
+1. Inspect: \`mrp edit <routine_id>\`
+2. Edit files directly under \`.mrp/routines/<routine_id>/\`
+3. Commit: \`mrp edit <routine_id> --commit --intent "why you changed it"\`
+
+## Run then judge
+
+After running a routine, review the output and record your assessment:
+- Run: \`mrp run <routine_id> [-- <args...>]\`
+- Judge: \`mrp judge <routine_id> "<run_id>" --status success|failure|partial --reason "..."\`
+
+Exit codes are informational signals, not authoritative. \`mrp judge\` sets the authoritative status.
+
+## Common commands
+
+- \`mrp list\` — list routines and lifecycle state
+- \`mrp show <routine_id>\` — view routine definition and run history
+- \`mrp create --name <name> --goal "<goal>" --non-goals "<...>" --success-criteria "<id:text>"\` — create a new routine
 - \`mrp run <routine_id>\` — execute a routine
+- \`mrp sync-skills\` — refresh projected host skills
 
 Run \`mrp --help\` for all available commands.
 
-## Warning
+## Guidance
 
-Do not edit, move, or delete files in \`.mrp/\` directly. Use MRP CLI commands to manage routines and store state. Manual edits may corrupt the store.
+Prefer CLI commands for structured updates to routine metadata. Avoid hand-editing \`routine.yaml\` and \`ledger.yaml\` directly — use CLI commands to prevent corruption.
 `;
 
 export async function handleInit(
@@ -36,6 +62,13 @@ export async function handleInit(
     // Generate AGENTS.md signpost
     const agentsMdPath = join(result.storePath, "AGENTS.md");
     await writeFile(agentsMdPath, AGENTS_MD_CONTENT, "utf8");
+
+    // Best-effort: inject MRP meta-prompt into project-level agent config files
+    try {
+      await syncMetaPrompts(process.cwd());
+    } catch {
+      // Non-fatal: meta-prompt sync failure doesn't invalidate init
+    }
 
     // Auto-sync: project meta skill to detected hosts
     let syncResult = null;

@@ -1,7 +1,13 @@
 import { join } from "node:path";
 
 import { syncSkills } from "../core/projection.ts";
-import { configPath, findStoreRoot, indexPath, routineDir, storeLockPath } from "../core/store.ts";
+import {
+  configPath,
+  findStoreRoot,
+  indexPath,
+  routineDir,
+  storeLockPath,
+} from "../core/store.ts";
 import { parseConfig } from "../schema/config.ts";
 import { parseIndex } from "../schema/index-schema.ts";
 import { parseRoutine, type Routine } from "../schema/routine.ts";

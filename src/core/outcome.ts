@@ -16,6 +16,7 @@ type GenerateOutcomeParams = {
   runId: string;
   goal: string;
   status: "success" | "failure" | "timeout" | "blocked";
+  statusAuto?: "success" | "failure" | "timeout";
   successCriteria: SuccessCriterion[];
   entrypointExitCode: number | null;
   verifierExitCode?: number | null;
@@ -30,6 +31,12 @@ type GenerateOutcomeParams = {
   truncated?: boolean;
   failureModes?: FailureMode[];
   warnings?: string[];
+  executionSnapshot?: {
+    entrypoint_hash: string;
+    entrypoint_path: string;
+    entrypoint_size: number;
+  };
+  scriptChanged?: boolean;
 };
 
 export function generateRunId(existingRunCount: number): string {
@@ -116,5 +123,10 @@ export function generateOutcome(params: GenerateOutcomeParams): Outcome {
     override: Boolean(params.override),
     truncated: Boolean(params.truncated),
     warnings: params.warnings ?? [],
+    ...(params.statusAuto !== undefined ? { status_auto: params.statusAuto } : {}),
+    ...(params.executionSnapshot !== undefined
+      ? { execution_snapshot: params.executionSnapshot }
+      : {}),
+    ...(params.scriptChanged !== undefined ? { script_changed: params.scriptChanged } : {}),
   };
 }

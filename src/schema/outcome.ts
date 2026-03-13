@@ -24,11 +24,23 @@ const OutcomeArtifactsSchema = z.object({
   notes: z.string().optional(),
 });
 
+export type ExecutionSnapshot = {
+  entrypoint_hash: string;
+  entrypoint_path: string;
+  entrypoint_size: number;
+};
+
+export type Judgment = {
+  status: "success" | "failure" | "partial";
+  reason?: string;
+  judged_at: string;
+};
+
 export const OutcomeSchema = z.object({
   routine_id: z.string(),
   run_id: RunIdSchema,
   intent_recap: z.string(),
-  status: z.enum(["success", "failure", "timeout", "blocked"]),
+  status: z.enum(["success", "failure", "timeout", "blocked", "partial"]),
   evidence: z.array(OutcomeEvidenceSchema),
   risks: z.array(z.string()),
   next_actions: z.array(z.string()),
@@ -37,6 +49,22 @@ export const OutcomeSchema = z.object({
   override: z.boolean(),
   truncated: z.boolean().optional(),
   warnings: z.array(z.string()).optional(),
+  status_auto: z.enum(["success", "failure", "timeout"]).optional(),
+  execution_snapshot: z
+    .object({
+      entrypoint_hash: z.string(),
+      entrypoint_path: z.string(),
+      entrypoint_size: z.number(),
+    })
+    .optional(),
+  script_changed: z.boolean().optional(),
+  judgment: z
+    .object({
+      status: z.enum(["success", "failure", "partial"]),
+      reason: z.string().optional(),
+      judged_at: z.string(),
+    })
+    .optional(),
 });
 
 export type Outcome = z.infer<typeof OutcomeSchema>;

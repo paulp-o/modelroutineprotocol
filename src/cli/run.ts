@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { createArtifactDir } from "../core/artifacts.ts";
 import { executeEntrypoint } from "../core/executor.ts";
+import { fingerprintFile } from "../core/fingerprint.ts";
 import { readIndex, routineToIndexEntry, updateIndexEntry } from "../core/index.ts";
 import { readLedger, appendOutcome } from "../core/ledger.ts";
 import { isRunnable } from "../core/lifecycle.ts";
@@ -132,6 +133,12 @@ export async function handleRun(
 
       const ledger = await readLedger(ledgerPath(root, routineId));
       const runId = generateRunId(ledger.runs.length);
+      const entrypointAbsPath = join(routineDir(root, routineId), routine.execution.entrypoint);
+      const executionSnapshot = await fingerprintFile(entrypointAbsPath);
+      const prevRun = ledger.runs[ledger.runs.length - 1];
+      const prevHash = prevRun?.execution_snapshot?.entrypoint_hash;
+      const scriptChanged =
+        prevHash !== undefined ? prevHash !== executionSnapshot.entrypoint_hash : undefined;
 
       if (noArtifacts) {
         artifactDir = await mkdtemp(join(tmpdir(), "mrp-run-"));
@@ -140,7 +147,7 @@ export async function handleRun(
       }
 
       const executionResult = await executeEntrypoint({
-        entrypointPath: join(routineDir(root, routineId), routine.execution.entrypoint),
+        entrypointPath: entrypointAbsPath,
         cwd: root,
         routineId,
         runId,
@@ -162,17 +169,25 @@ export async function handleRun(
           })
         : undefined;
 
-      const status = determineStatus(executionResult.exitCode, executionResult.timedOut, verification);
+      const statusAuto = determineStatus(
+        executionResult.exitCode,
+        executionResult.timedOut,
+        verification,
+      );
+      const status = statusAuto;
 
       const outcome = generateOutcome({
         routineId,
         runId,
         goal: routine.intent.goal,
         status,
+        statusAuto,
         successCriteria: routine.intent.success_criteria,
         entrypointExitCode: executionResult.exitCode,
         verifierExitCode: verification?.verifierExitCode,
         verifierUsed: verification?.verifierUsed,
+        executionSnapshot,
+        scriptChanged: scriptChanged ?? undefined,
         timedOut: executionResult.timedOut,
         override,
         startedAt: executionResult.startedAt,

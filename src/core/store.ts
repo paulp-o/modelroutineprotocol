@@ -59,6 +59,10 @@ export function configPath(root: string): string {
   return join(storePath(root), "config.yaml");
 }
 
+export function agentsMdPath(root: string): string {
+  return join(storePath(root), "AGENTS.md");
+}
+
 export function indexPath(root: string): string {
   return join(storePath(root), "index.yaml");
 }

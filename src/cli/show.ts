@@ -1,5 +1,6 @@
 import { join } from "node:path";
 
+import type { Outcome } from "../schema/outcome.ts";
 import { findStoreRoot, ledgerPath, routineDir } from "../core/store.ts";
 import { parseLedger } from "../schema/ledger.ts";
 import { parseRoutine, type Routine } from "../schema/routine.ts";
@@ -24,6 +25,11 @@ const EMPTY_LEDGER_SUMMARY: LedgerSummary = {
   last_run_ts: null,
 };
 
+type LedgerDetails = {
+  summary: LedgerSummary;
+  latest_run: Outcome | null;
+};
+
 async function readRoutine(root: string, routineId: string): Promise<Routine | null> {
   const routinePath = join(routineDir(root, routineId), "routine.yaml");
 
@@ -39,7 +45,7 @@ async function readRoutine(root: string, routineId: string): Promise<Routine | n
   }
 }
 
-async function readLedgerSummary(root: string, routineId: string): Promise<LedgerSummary> {
+async function readLedgerSummary(root: string, routineId: string): Promise<LedgerDetails> {
   const path = ledgerPath(root, routineId);
 
   try {
@@ -48,14 +54,17 @@ async function readLedgerSummary(root: string, routineId: string): Promise<Ledge
     const lastRun = ledger.runs[ledger.runs.length - 1];
 
     return {
-      runs_total: ledger.runs.length,
-      last_status: lastRun?.status ?? null,
-      last_run_id: lastRun?.run_id ?? null,
-      last_run_ts: lastRun?.timing.ended_at ?? null,
+      summary: {
+        runs_total: ledger.runs.length,
+        last_status: lastRun?.status ?? null,
+        last_run_id: lastRun?.run_id ?? null,
+        last_run_ts: lastRun?.timing.ended_at ?? null,
+      },
+      latest_run: lastRun ?? null,
     };
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") {
-      return { ...EMPTY_LEDGER_SUMMARY };
+      return { summary: { ...EMPTY_LEDGER_SUMMARY }, latest_run: null };
     }
 
     throw error;
@@ -78,10 +87,11 @@ export async function handleShow(
       return errEnvelope("show", "ROUTINE_NOT_FOUND", `Routine '${routineId}' not found`);
     }
 
-    const ledgerSummary = await readLedgerSummary(root, routineId);
+    const ledger = await readLedgerSummary(root, routineId);
     return okEnvelope("show", {
       routine,
-      ledger_summary: ledgerSummary,
+      ledger_summary: ledger.summary,
+      latest_run: ledger.latest_run,
     });
   } catch (error) {
     if (isNodeError(error) && error.code === "STORE_NOT_FOUND") {

@@ -8,6 +8,7 @@ import { handleDeprecate } from "./cli/deprecate.ts";
 import { handleDoctor } from "./cli/doctor.ts";
 import { handleEdit } from "./cli/edit.ts";
 import { handleInit } from "./cli/init.ts";
+import { handleJudge } from "./cli/judge.ts";
 import { renderCommandHelp, renderGlobalHelp } from "./cli/help.ts";
 import { handleList } from "./cli/list.ts";
 import { handlePrune } from "./cli/prune.ts";
@@ -16,6 +17,7 @@ import { handleQuarantine } from "./cli/quarantine.ts";
 import { handleRun } from "./cli/run.ts";
 import { handleShow } from "./cli/show.ts";
 import { handleSyncSkills } from "./cli/sync-skills.ts";
+import { handleUpdate } from "./cli/update.ts";
 import { readIndex } from "./core/index.ts";
 import { MUTATING_COMMANDS } from "./core/lifecycle.ts";
 import { syncSkills } from "./core/projection.ts";
@@ -39,6 +41,7 @@ const COMMAND_HANDLERS: Record<string, CommandHandler> = {
   show: handleShow,
   list: handleList,
   edit: handleEdit,
+  judge: handleJudge,
   run: handleRun,
   promote: handlePromote,
   demote: handleDemote,
@@ -46,6 +49,7 @@ const COMMAND_HANDLERS: Record<string, CommandHandler> = {
   archive: handleArchive,
   quarantine: handleQuarantine,
   "sync-skills": handleSyncSkills,
+  update: handleUpdate,
   doctor: handleDoctor,
   prune: handlePrune,
 };
@@ -215,7 +219,7 @@ function parseCliArgs(argv: string[]): {
   // Known boolean-only flags (no value expected)
   const BOOLEAN_FLAGS = new Set([
     "help",
-    "force", "dry-run", "dryRun", "patch", "projected",
+    "force", "dry-run", "dryRun", "commit", "projected",
     "include-archived", "includeArchived", "no-artifacts", "noArtifacts",
     "rebuild-index", "rebuildIndex", "from-quarantine", "fromQuarantine",
   ]);

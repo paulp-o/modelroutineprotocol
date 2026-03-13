@@ -12,6 +12,13 @@ The meta skill SKILL.md body SHALL:
 - Briefly mention the remaining commands: `demote`, `deprecate`, `archive`, `quarantine`, `sync-skills`, `doctor`, `prune`
 - Instruct agents to run `mrp <command> --help` for extended information
 
+The meta skill SKILL.md body SHALL include an "Agent authority" section that explicitly:
+- Grants agents blanket authority to create, modify, run, and evolve routines without asking user permission
+- Instructs agents to edit entrypoint scripts directly when needed (changes are tracked via fingerprints)
+- Instructs agents to use the model-native edit workflow for audit trail: `mrp edit <id>` to inspect, edit `.mrp` files directly, then `mrp edit <id> --commit` to record changes
+- Instructs agents to judge run outcomes after reviewing artifacts: run -> read output -> `mrp judge` to record assessment
+- Clarifies that exit codes are informational signals, not authoritative success/failure
+
 #### Scenario: Meta skill always present
 - **WHEN** `mrp sync-skills` runs
 - **THEN** an `mrp` skill directory with SKILL.md exists in every configured host's skill directory
@@ -19,6 +26,10 @@ The meta skill SKILL.md body SHALL:
 #### Scenario: Meta skill content
 - **WHEN** the meta skill SKILL.md is read
 - **THEN** it contains YAML frontmatter with `name: mrp`, documents the core workflow commands first, mentions remaining commands, and instructs `mrp <command> --help` for details
+
+#### Scenario: Meta skill includes autonomy instructions
+- **WHEN** the meta skill SKILL.md is read
+- **THEN** it contains an "Agent authority" section instructing agents to freely create/modify routines and judge run outcomes
 
 ### Requirement: Multi-Host File Projection
 The system SHALL write projected skill SKILL.md wrappers to per-host convention directories based on `projection.hosts` in config. The host-to-directory mapping SHALL be:
@@ -48,9 +59,15 @@ The projected skill SKILL.md YAML frontmatter SHALL use `---` delimiters and MUS
 
 The body of a projected skill SKILL.md SHALL contain: when the routine is relevant (brief), goal, non-goals summary, minimal success criteria, execution command (`mrp run <routine_id>`), and canonical truth reference (`mrp show <routine_id>`).
 
+A projected skill SKILL.md body SHALL include a brief note that the model should judge success after running, referencing `mrp judge`.
+
 #### Scenario: Wrapper content matches routine
 - **WHEN** a routine with goal "Ensure build succeeds" is projected
 - **THEN** the SKILL.md contains YAML frontmatter with `name: mrp-<skill_name>` and `description` derived from the routine, plus the goal, non-goals, and instructions to run via `mrp run <id>`
+
+#### Scenario: Wrapper mentions judgment
+- **WHEN** a routine skill wrapper is read
+- **THEN** it contains a note about using `mrp judge` to record the model's assessment after running
 
 ### Requirement: Projection Auto-Suggest
 The system SHALL suggest projection for routines that have been run 3 or more times within the last 7 days (configurable via `projection.auto_suggest_threshold_runs` and `projection.auto_suggest_window_days`). Suggestions SHALL appear in the response envelope as `data.projection_suggestion`.

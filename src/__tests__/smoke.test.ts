@@ -79,27 +79,6 @@ async function runMrp(args: string[], cwd: string): Promise<MRPResult> {
   return toResult(args, exitCode, stdout, stderr);
 }
 
-async function runMrpEditWithStdin(routineId: string, yamlPatch: string, cwd: string): Promise<MRPResult> {
-  const args = ["edit", routineId, "--patch"];
-  const proc = Bun.spawn(["bun", "run", CLI_ENTRY, ...args], {
-    cwd,
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  proc.stdin.write(yamlPatch);
-  proc.stdin.end();
-
-  const [exitCode, stdout, stderr] = await Promise.all([
-    proc.exited,
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-
-  return toResult(args, exitCode, stdout, stderr);
-}
-
 async function pathExists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -260,10 +239,20 @@ describe("MRP Integration", () => {
     await initStore(tempDir);
     const routine = await createRoutine(tempDir, "Edit Routine");
 
-    const patch = YAML.stringify({ description: "Updated by smoke test" });
-    const edited = await runMrpEditWithStdin(routine.id, patch, tempDir);
-    expectOk(edited, "edit");
-    expect(edited.data?.routine?.description).toBe("Updated by smoke test");
+    // Inspect mode
+    const inspected = await runMrp(["edit", routine.id], tempDir);
+    expectOk(inspected, "edit");
+    expect(inspected.data?.mode).toBe("inspect");
+
+    // Modify the entrypoint
+    const entrypointPath = join(tempDir, ".mrp", "routines", routine.id, "run.sh");
+    await writeFile(entrypointPath, "#!/usr/bin/env bash\necho 'modified'\nexit 0\n");
+
+    // Commit
+    const committed = await runMrp(["edit", routine.id, "--commit", "--intent", "Updated by smoke test"], tempDir);
+    expectOk(committed, "edit");
+    expect(committed.data?.mode).toBe("commit");
+    expect(committed.data?.edit_event?.intent).toBe("Updated by smoke test");
   });
 
   test("promote draft to active", async () => {
@@ -379,12 +368,16 @@ describe("MRP Integration", () => {
     expectOk(await runMrp(["show", routineId], tempDir), "show");
     expectOk(await runMrp(["list"], tempDir), "list");
 
-    const edited = await runMrpEditWithStdin(
-      routineId,
-      YAML.stringify({ description: "Full pipeline patched" }),
-      tempDir,
-    );
-    expectOk(edited, "edit");
+    const inspected = await runMrp(["edit", routineId], tempDir);
+    expectOk(inspected, "edit");
+    expect(inspected.data?.mode).toBe("inspect");
+
+    const entrypointPath = join(tempDir, ".mrp", "routines", routineId, "run.sh");
+    await writeFile(entrypointPath, "#!/usr/bin/env bash\necho 'pipeline edited'\nexit 0\n");
+
+    const committed = await runMrp(["edit", routineId, "--commit", "--intent", "Full pipeline edited"], tempDir);
+    expectOk(committed, "edit");
+    expect(committed.data?.mode).toBe("commit");
 
     await makeRoutineDeterministic(tempDir, created);
 
@@ -406,9 +399,6 @@ describe("MRP Integration", () => {
     const routine = await createRoutine(tempDir, "Frontmatter Test");
 
     expectOk(await runMrp(["promote", routine.id], tempDir), "promote");
-
-    const editPatch = YAML.stringify({ projection: { projected: true } });
-    expectOk(await runMrpEditWithStdin(routine.id, editPatch, tempDir), "edit");
 
     expectOk(await runMrp(["sync-skills"], tempDir), "sync-skills");
 
@@ -485,7 +475,7 @@ describe("MRP Integration", () => {
     const agentsContent = await readFile(agentsPath, "utf8");
     expect(agentsContent).toContain("MRP Store");
     expect(agentsContent).toContain("mrp list");
-    expect(agentsContent).toContain("Do not edit");
+    expect(agentsContent).toContain("Agent authority");
 
     const metaPath = join(tempDir, ".cursor", "skills", "mrp", "SKILL.md");
     expect(await pathExists(metaPath)).toBe(true);
@@ -507,5 +497,228 @@ describe("MRP Integration", () => {
     expect(listed.data?.routines?.[0]?.id).toBe(routine.id);
 
     expect(await pathExists(indexPath)).toBe(true);
+  });
+
+  // ─── mrp-agent-autonomy tests ───
+
+  test("judge overrides latest run status", async () => {
+    await initStore(tempDir);
+    const routine = await createRoutine(tempDir, "Judge Override");
+    const ep = join(tempDir, ".mrp", "routines", routine.id, "run.sh");
+    await writeFile(ep, "#!/usr/bin/env bash\necho 'build output'\nexit 1\n");
+    await chmod(ep, 0o755);
+    await runMrp(["promote", routine.id], tempDir);
+
+    const runRes = await runMrp(["run", routine.id], tempDir);
+    expectOk(runRes, "run");
+    const runId = runRes.data?.outcome?.run_id;
+    expect(runRes.data?.outcome?.status).toBe("failure");
+    expect(runRes.data?.outcome?.status_auto).toBe("failure");
+
+    const judgeRes = await runMrp(
+      ["judge", routine.id, runId, "--status", "success", "--reason", "warnings only"],
+      tempDir,
+    );
+    expectOk(judgeRes, "judge");
+    expect(judgeRes.data?.run?.status).toBe("success");
+    expect(judgeRes.data?.run?.status_auto).toBe("failure");
+    expect(judgeRes.data?.run?.judgment?.status).toBe("success");
+    expect(judgeRes.data?.run?.judgment?.reason).toBe("warnings only");
+    expect(judgeRes.data?.run?.judgment?.judged_at).toBeDefined();
+
+    const showRes = await runMrp(["show", routine.id], tempDir);
+    expectOk(showRes, "show");
+    expect(showRes.data?.ledger_summary?.last_status).toBe("success");
+
+    const listRes = await runMrp(["list"], tempDir);
+    expectOk(listRes, "list");
+    const entry = listRes.data?.routines?.find((r: any) => r.id === routine.id);
+    expect(entry?.last_run_status).toBe("success");
+  });
+
+  test("judge sets partial status", async () => {
+    await initStore(tempDir);
+    const routine = await createRoutine(tempDir, "Partial Judge");
+    const ep = join(tempDir, ".mrp", "routines", routine.id, "run.sh");
+    await writeFile(ep, "#!/usr/bin/env bash\necho 'ok'\nexit 0\n");
+    await chmod(ep, 0o755);
+    await runMrp(["promote", routine.id], tempDir);
+
+    const runRes = await runMrp(["run", routine.id], tempDir);
+    expectOk(runRes, "run");
+    const runId = runRes.data?.outcome?.run_id;
+
+    const judgeRes = await runMrp(
+      ["judge", routine.id, runId, "--status", "partial", "--reason", "1 flaky test"],
+      tempDir,
+    );
+    expectOk(judgeRes, "judge");
+    expect(judgeRes.data?.run?.status).toBe("partial");
+    expect(judgeRes.data?.run?.judgment?.status).toBe("partial");
+
+    const listRes = await runMrp(["list"], tempDir);
+    expectOk(listRes, "list");
+    const entry = listRes.data?.routines?.find((r: any) => r.id === routine.id);
+    expect(entry?.last_run_status).toBe("partial");
+  });
+
+  test("judge error cases", async () => {
+    await initStore(tempDir);
+    const routine = await createRoutine(tempDir, "Judge Errors");
+    const ep = join(tempDir, ".mrp", "routines", routine.id, "run.sh");
+    await writeFile(ep, "#!/usr/bin/env bash\nexit 0\n");
+    await chmod(ep, 0o755);
+    await runMrp(["promote", routine.id], tempDir);
+    const runRes = await runMrp(["run", routine.id], tempDir);
+    const runId = runRes.data?.outcome?.run_id;
+
+    // Non-existent run
+    const notFound = await runMrp(
+      ["judge", routine.id, "nonexistent-run", "--status", "success"],
+      tempDir,
+    );
+    expectFail(notFound);
+    expect(notFound.error?.code).toBe("RUN_NOT_FOUND");
+
+    // Missing --status
+    const noStatus = await runMrp(["judge", routine.id, runId], tempDir);
+    expectFail(noStatus);
+
+    // Invalid --status value
+    const badStatus = await runMrp(
+      ["judge", routine.id, runId, "--status", "nope"],
+      tempDir,
+    );
+    expectFail(badStatus);
+  });
+
+  test("run records execution_snapshot with entrypoint hash", async () => {
+    const { createHash } = await import("node:crypto");
+    await initStore(tempDir);
+    const routine = await createRoutine(tempDir, "Fingerprint Test");
+    const ep = join(tempDir, ".mrp", "routines", routine.id, "run.sh");
+    const scriptContent = "#!/usr/bin/env bash\necho 'fingerprint test'\nexit 0\n";
+    await writeFile(ep, scriptContent);
+    await chmod(ep, 0o755);
+    await runMrp(["promote", routine.id], tempDir);
+
+    const result = await runMrp(["run", routine.id], tempDir);
+    expectOk(result, "run");
+
+    const snapshot = result.data?.outcome?.execution_snapshot;
+    expect(snapshot).toBeDefined();
+    expect(snapshot?.entrypoint_hash).toBeDefined();
+    expect(snapshot?.entrypoint_hash?.length).toBe(64);
+    expect(snapshot?.entrypoint_path).toBeDefined();
+    expect(snapshot?.entrypoint_size).toBeGreaterThan(0);
+
+    const expectedHash = createHash("sha256")
+      .update(Buffer.from(scriptContent))
+      .digest("hex");
+    expect(snapshot?.entrypoint_hash).toBe(expectedHash);
+  });
+
+  test("script_changed detection between runs", async () => {
+    await initStore(tempDir);
+    const routine = await createRoutine(tempDir, "Script Change");
+    const ep = join(tempDir, ".mrp", "routines", routine.id, "run.sh");
+    await writeFile(ep, "#!/usr/bin/env bash\necho v1\nexit 0\n");
+    await chmod(ep, 0o755);
+    await runMrp(["promote", routine.id], tempDir);
+
+    // First run — no previous, script_changed should be absent
+    const run1 = await runMrp(["run", routine.id], tempDir);
+    expectOk(run1, "run");
+    expect(run1.data?.outcome?.script_changed).toBeUndefined();
+
+    // Modify entrypoint
+    await writeFile(ep, "#!/usr/bin/env bash\necho v2\nexit 0\n");
+
+    // Second run — script_changed should be true
+    const run2 = await runMrp(["run", routine.id], tempDir);
+    expectOk(run2, "run");
+    expect(run2.data?.outcome?.script_changed).toBe(true);
+
+    // Third run without changes — script_changed should be false
+    const run3 = await runMrp(["run", routine.id], tempDir);
+    expectOk(run3, "run");
+    expect(run3.data?.outcome?.script_changed).toBeFalsy();
+  });
+
+  test("meta skill contains Agent authority section", async () => {
+    const hostDir = join(tempDir, ".cursor", "skills");
+    await mkdir(hostDir, { recursive: true });
+
+    await runMrp(["init"], tempDir);
+    await runMrp(["sync-skills"], tempDir);
+
+    const metaSkillPath = join(hostDir, "mrp", "SKILL.md");
+    const content = await readFile(metaSkillPath, "utf8");
+    expect(content).toContain("Agent authority");
+    expect(content).toContain("mrp judge");
+    expect(content).toContain("--commit");
+  });
+
+  test("edit inspect mode outputs context and writes baseline", async () => {
+    await initStore(tempDir);
+    const routine = await createRoutine(tempDir, "Edit Inspect");
+
+    const result = await runMrp(["edit", routine.id], tempDir);
+    expectOk(result, "edit");
+    expect(result.data?.mode).toBe("inspect");
+    expect(result.data?.files).toBeDefined();
+    expect(Array.isArray(result.data?.files)).toBe(true);
+    expect(result.data?.instructions).toBeDefined();
+
+    const sessionPath = join(
+      tempDir, ".mrp", "routines", routine.id, "edit_session.yaml",
+    );
+    expect(await pathExists(sessionPath)).toBe(true);
+  });
+
+  test("edit commit mode records EditEvent in ledger", async () => {
+    await initStore(tempDir);
+    const routine = await createRoutine(tempDir, "Edit Commit");
+
+    // Inspect to create baseline
+    await runMrp(["edit", routine.id], tempDir);
+
+    // Modify entrypoint
+    const ep = join(tempDir, ".mrp", "routines", routine.id, "run.sh");
+    await writeFile(ep, "#!/usr/bin/env bash\necho 'edited'\nexit 0\n");
+
+    // Commit
+    const result = await runMrp(
+      ["edit", routine.id, "--commit", "--intent", "test change"],
+      tempDir,
+    );
+    expectOk(result, "edit");
+    expect(result.data?.mode).toBe("commit");
+    expect(result.data?.edit_event?.intent).toBe("test change");
+    expect(result.data?.edit_event?.changed_files?.length).toBeGreaterThan(0);
+
+    // Verify ledger
+    const ledgerContent = await readFile(
+      join(tempDir, ".mrp", "routines", routine.id, "ledger.yaml"),
+      "utf8",
+    );
+    const ledger = YAML.parse(ledgerContent);
+    expect(ledger.edits).toBeDefined();
+    expect(ledger.edits.length).toBe(1);
+    expect(ledger.edits[0].type).toBe("edit");
+    expect(ledger.edits[0].intent).toBe("test change");
+  });
+
+  test("edit commit with no changes returns NO_CHANGES", async () => {
+    await initStore(tempDir);
+    const routine = await createRoutine(tempDir, "Edit No Change");
+
+    // Inspect baseline
+    await runMrp(["edit", routine.id], tempDir);
+
+    // Commit immediately without changes
+    const result = await runMrp(["edit", routine.id, "--commit"], tempDir);
+    expectFail(result);
+    expect(result.error?.code).toBe("NO_CHANGES");
   });
 });
